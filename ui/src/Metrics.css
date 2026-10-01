@@ -1,0 +1,330 @@
+/* ============================================================
+   METRICS PAGE
+   ============================================================ */
+
+.metrics-page {
+  width: 100%;
+}
+
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.metrics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.metrics-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.metrics-header p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+
+/* ============================================================
+   KPI CARDS
+   ============================================================ */
+
+.metrics-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metrics-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.metrics-card-title {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.metrics-card-value {
+  font-size: 25px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.metrics-card-subtitle {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+
+/* ============================================================
+   SECTIONS
+   ============================================================ */
+
+.metrics-section {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 20px;
+}
+
+.metrics-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.metrics-section-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.metrics-section-header p {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.metrics-section-header strong {
+  font-size: 15px;
+}
+
+
+/* ============================================================
+   THROUGHPUT CHART
+   ============================================================ */
+
+.throughput-chart {
+  height: 250px;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.throughput-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.throughput-value {
+  height: 22px;
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.throughput-bar-container {
+  flex: 1;
+  width: 100%;
+  max-width: 48px;
+  display: flex;
+  align-items: flex-end;
+  background: #f3f4f6;
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+}
+
+.throughput-bar {
+  width: 100%;
+  min-height: 3px;
+  background: #2563eb;
+  border-radius: 6px 6px 0 0;
+  transition: height 0.3s ease;
+}
+
+.throughput-time {
+  height: 25px;
+  padding-top: 8px;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+
+/* ============================================================
+   WORKER LAG
+   ============================================================ */
+
+.worker-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.worker-metric-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 50px;
+  align-items: center;
+  gap: 14px;
+}
+
+.worker-metric-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.worker-metric-bar {
+  width: 100%;
+}
+
+.metrics-progress {
+  width: 100%;
+  height: 7px;
+  background: #eef0f3;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.metrics-progress-fill {
+  height: 100%;
+  background: #2563eb;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.worker-metric-value {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.metrics-note {
+  margin-top: 16px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+
+/* ============================================================
+   RESOURCE USAGE
+   ============================================================ */
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.resource-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.resource-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.resource-card-header span {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.resource-card-header strong {
+  font-size: 14px;
+}
+
+
+/* ============================================================
+   PROMETHEUS
+   ============================================================ */
+
+.prometheus-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prometheus-section h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.prometheus-section p {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.prometheus-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1100px) {
+
+  .metrics-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+}
+
+
+@media (max-width: 700px) {
+
+  .metrics-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .worker-metric-row {
+    grid-template-columns: 90px 1fr 40px;
+    gap: 8px;
+  }
+
+  .throughput-chart {
+    gap: 6px;
+  }
+
+  .throughput-value {
+    font-size: 9px;
+  }
+
+  .throughput-time {
+    font-size: 9px;
+  }
+
+  .metrics-section {
+    padding: 16px;
+  }
+
+}

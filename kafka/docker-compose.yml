@@ -45,3 +45,4 @@ services:
         cub kafka-ready -b kafka:29092 1 60
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic truck-telemetry --partitions 20 --replication-factor 1
         kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic truck-temperature-averages --partitions 20 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic truck-temperature-averages-changelog --partitions 20 --replication-factor 1 --config cleanup.policy=compact

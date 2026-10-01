@@ -1,120 +1,141 @@
-"""RocksDB-backed state store for Faust stream processors.
-
-Provides thread-safe key-value persistence for windowed aggregation state.
-Key format: truck_id (bytes) -> JSON value: {sum, count, last_ts}
-Changelog topic: truck-temperature-averages-changelog
-"""
+"""Persistent RocksDB state for five-minute per-truck temperature windows."""
 
 from __future__ import annotations
 
-import json
-import logging
+import threading
 from pathlib import Path
+from typing import Any
 
-logger = logging.getLogger(__name__)
+from rocksdict import Rdict
+
+WINDOW_SECONDS = 5 * 60
+DEFAULT_STREAM = "truck-telemetry"
+
+
+def window_start(timestamp: str) -> int:
+    """Return the UTC epoch start of an event's five-minute tumbling window."""
+    from datetime import datetime
+
+    parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("timestamp must include a timezone")
+    epoch = int(parsed.timestamp())
+    return epoch - epoch % WINDOW_SECONDS
+
+
+def state_key(truck_id: str, start: int, stream_id: str = DEFAULT_STREAM) -> str:
+    # Preserve existing single-stream RocksDB and changelog keys for the
+    # original topic; namespace every additional stream to avoid state mixing.
+    if stream_id == DEFAULT_STREAM:
+        return f"{truck_id}|{start}"
+    return f"{stream_id}|{truck_id}|{start}"
 
 
 class TruckState:
-    """RocksDB-backed state for per-truck rolling average calculations.
+    """Thread-safe durable mapping backed by RocksDB.
 
-    Stores aggregation state keyed by truck_id.
-    State is automatically backed up to Kafka changelog topic.
+    State values are JSON dictionaries so the same representation can be
+    written to and restored from the Kafka changelog topic.
     """
 
-    def __init__(self, db_path: str = "./faust_state"):
-        """Initialize RocksDB state store.
-
-        Args:
-            db_path: Path to RocksDB directory (relative to project root)
-        """
+    def __init__(self, db_path: str = "./rocksdb/state") -> None:
         self.db_path = Path(db_path)
-        self.db_path.mkdir(parents=True, exist_ok=True)
-        self._db = None
-        self._open()
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._db = Rdict(str(self.db_path))
+        self._lock = threading.RLock()
 
-    def _open(self) -> None:
-        """Open or create the RocksDB instance."""
-        try:
-            # Faust's rocksdb:// backend uses faust.Table with rocksdb backing
-            # This initializer sets up the local DB directory structure
-            from faust import Table
+    @staticmethod
+    def make_value(
+        truck_id: str,
+        temperature: float,
+        timestamp: str,
+        stream_id: str = DEFAULT_STREAM,
+        previous_value: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        start = window_start(timestamp)
+        key = state_key(truck_id, start, stream_id)
+        return {
+            "truck_id": truck_id,
+            "input_topic": stream_id,
+            "window_start": start,
+            "window_end": start + WINDOW_SECONDS,
+            "sum": float(temperature),
+            "count": 1,
+            "average": float(temperature),
+            "last_event_timestamp": timestamp,
+            "state_key": key,
+        }
 
-            # Verify path is valid for RocksDB
-            logger.info(f"Initializing RocksDB state store at {self.db_path}")
-            # The actual DB handle is managed by Faust Table;
-            # we just ensure the directory exists
-            if not self.db_path.exists():
-                self.db_path.mkdir(parents=True, exist_ok=True)
-                logger.info("Created RocksDB directory")
+    def prepare_update(
+        self,
+        truck_id: str,
+        temperature: float,
+        timestamp: str,
+        stream_id: str = DEFAULT_STREAM,
+        previous_value: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Calculate the next value without mutating state before Kafka commits."""
+        value = self.make_value(truck_id, temperature, timestamp, stream_id)
+        key = value["state_key"]
+        with self._lock:
+            previous = previous_value if previous_value is not None else self._db.get(key)
+            if previous:
+                value["sum"] += float(previous["sum"])
+                value["count"] += int(previous["count"])
+                value["average"] = value["sum"] / value["count"]
+        return value
 
-        except Exception as e:
-            logger.error(f"Failed to initialize RocksDB at {self.db_path}: {e}")
-            raise
+    def update(
+        self,
+        truck_id: str,
+        temperature: float,
+        timestamp: str,
+        stream_id: str = DEFAULT_STREAM,
+    ) -> dict[str, Any]:
+        """Calculate and persist a new window snapshot."""
+        value = self.prepare_update(truck_id, temperature, timestamp, stream_id)
+        self.restore(value)
+        return value
 
-    def update(self, truck_id: str, temperature: float, timestamp: str) -> None:
-        """Update rolling average state for a truck.
+    def restore(self, value: dict[str, Any]) -> None:
+        """Apply one committed changelog snapshot to the local state store."""
+        key = value.get("state_key") or state_key(
+            value["truck_id"], int(value["window_start"]), value.get("input_topic", DEFAULT_STREAM)
+        )
+        restored = dict(value)
+        restored["state_key"] = key
+        with self._lock:
+            self._db[key] = restored
 
-        Args:
-            truck_id: Truck identifier string
-            temperature: Temperature reading
-            timestamp: ISO format event timestamp
-        """
-        if self._db is None:
-            logger.warning("RocksDB not initialized, cannot update state")
-            return
+    def get(
+        self, truck_id: str, start: int, stream_id: str = DEFAULT_STREAM
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            value = self._db.get(state_key(truck_id, start, stream_id))
+            return dict(value) if value else None
 
-        try:
-            # Store as JSON: {sum, count, last_ts}
-            # Faust handles serialization/deserialization via Table
-            key = truck_id.encode("utf-8")
-            value = json.dumps(
-                {"sum": temperature, "count": 1, "last_ts": timestamp}
-            ).encode("utf-8")
+    def get_avg(
+        self, truck_id: str, timestamp: str, stream_id: str = DEFAULT_STREAM
+    ) -> float | None:
+        value = self.get(truck_id, window_start(timestamp), stream_id)
+        return float(value["average"]) if value else None
 
-            # Faust Table will handle the actual DB put operation
-            # This method is called from the Faust actor, Table handles persistence
-            logger.debug(f"Updated state for truck {truck_id}: {temperature}@ {timestamp}")
+    def snapshots(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(value) for _, value in self._db.items()]
 
-        except Exception as e:
-            logger.error(f"Failed to update state for truck {truck_id}: {e}")
-            raise
-
-    def get_avg(self, truck_id: str) -> float:
-        """Get current average temperature for a truck.
-
-        Args:
-            truck_id: Truck identifier string
-
-        Returns:
-            Average temperature (0.0 if no data)
-        """
-        if self._db is None:
-            return 0.0
-
-        try:
-            # Faust Table handles retrieval; this is a stub for direct DB access
-            # In production, use: current = truck_table[truck_id]
-            return 0.0
-
-        except Exception as e:
-            logger.error(f"Failed to get avg for truck {truck_id}: {e}")
-            return 0.0
+    def flush(self) -> None:
+        with self._lock:
+            self._db.flush()
 
     def close(self) -> None:
-        """Close the RocksDB instance."""
-        if self._db is not None:
-            try:
-                # Faust manages DB lifecycle; direct close not typically needed
+        with self._lock:
+            if self._db is not None:
+                self._db.close()
                 self._db = None
-                logger.info("RocksDB state store closed")
-            except Exception as e:
-                logger.error(f"Error closing RocksDB: {e}")
 
-    def __enter__(self):
-        """Context manager entry."""
+    def __enter__(self) -> "TruckState":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         self.close()
-        return False

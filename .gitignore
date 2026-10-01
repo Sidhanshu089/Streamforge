@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+rocksdb/
+faust_state/
 
 ui/node_modules/
 ui/build/
+logs/

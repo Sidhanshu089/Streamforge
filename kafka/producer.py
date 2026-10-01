@@ -40,12 +40,16 @@ def _delivery_callback(state: dict[str, int]):
 def produce_events(
     *,
     topic: str = DEFAULT_TOPIC,
+    topics: list[str] | None = None,
     bootstrap_servers: str = DEFAULT_BOOTSTRAP_SERVERS,
     event_count: int | None = None,
     duration_sec: float | None = 60,
     rate_hz: int | None = None,
-) -> dict[str, float | int]:
-    """Produce telemetry and return an auditable delivery summary."""
+) -> dict[str, Any]:
+    """Produce telemetry, optionally spread round-robin across input topics."""
+    target_topics = list(dict.fromkeys(topics or [topic]))
+    if not target_topics or any(not name.strip() for name in target_topics):
+        raise ValueError("At least one non-empty Kafka topic is required.")
     if event_count is None and duration_sec is None:
         raise ValueError("Provide event_count, duration_sec, or both.")
     if event_count is not None and event_count <= 0:
@@ -83,9 +87,10 @@ def produce_events(
 
         event = generate_telemetry()
         payload = json.dumps(event, separators=(",", ":")).encode("utf-8")
+        target_topic = target_topics[produced % len(target_topics)]
         while True:
             try:
-                producer.produce(topic, key=event["truck_id"], value=payload, on_delivery=callback)
+                producer.produce(target_topic, key=event["truck_id"], value=payload, on_delivery=callback)
                 break
             except BufferError:
                 producer.poll(0.1)
@@ -96,8 +101,9 @@ def produce_events(
     elapsed = time.perf_counter() - started_at
     if remaining:
         delivery_state["failed"] += remaining
-    summary: dict[str, float | int] = {
+    summary: dict[str, Any] = {
         "produced": produced,
+        "topics": target_topics,
         "delivered": delivery_state["delivered"],
         "failed": delivery_state["failed"],
         "elapsed_seconds": round(elapsed, 3),
@@ -111,6 +117,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Produce StreamForge truck telemetry.")
     parser.add_argument("--bootstrap-servers", default=DEFAULT_BOOTSTRAP_SERVERS)
     parser.add_argument("--topic", default=DEFAULT_TOPIC)
+    parser.add_argument("--topics", help="Comma-separated topics for round-robin multi-stream input.")
     parser.add_argument("--events", type=int, help="Produce exactly this many events.")
     parser.add_argument("--duration", type=float, default=60, help="Maximum duration in seconds.")
     parser.add_argument("--rate", type=int, help="Optional maximum events per second.")
@@ -121,6 +128,7 @@ if __name__ == "__main__":
     args = parse_args()
     produce_events(
         topic=args.topic,
+        topics=[name.strip() for name in args.topics.split(",") if name.strip()] if args.topics else None,
         bootstrap_servers=args.bootstrap_servers,
         event_count=args.events,
         duration_sec=args.duration,

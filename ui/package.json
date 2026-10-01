@@ -23,5 +23,11 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-scripts": "^5.0.1",
+    "reactflow": "^11.11.4"
   }
 }
